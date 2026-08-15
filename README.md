@@ -1,5 +1,22 @@
 # reportbaga
 
+
+This repository is the package. The compiler and `std` stay in the baga
+language monorepo. Check this tree out as `app-product/reportbaga` there
+(git submodule) so path deps and `-I app-product` keep working.
+
+## Checkout
+
+Inside a baga language clone:
+
+```bash
+git submodule update --init --recursive
+# or, first time from a fresh baga tree without the submodule recorded:
+git clone git@github.com:bagalang/reportbaga.git app-product/reportbaga
+```
+
+`sandak.toml` keeps path deps so shared packages stay in baga.
+`apps/report` still depends on `../reportbaga`. `tests/report_test.baga` stays in baga.
 **Счетоводни отчети:** данни / HTML → **Excel · CSV · PDF · HTML preview**.  
 PDF с **UTF-8 / кирилица** (вграден TTF).
 
