@@ -74,3 +74,7 @@ baga -I ../.. -I .. demo.baga tpl-pdf  /tmp/t.pdf
 
 **Product CLI:** `apps/report` — see `docs/runbooks/report.md`.  
 Excel: frozen header + sheet name = report title.
+
+## License
+
+[MIT](LICENSE) — Copyright (c) 2026 Dim Gigov.
