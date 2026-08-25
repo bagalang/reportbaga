@@ -12,9 +12,9 @@
 
 Multiple tables / multi-sheet Excel later.
 
-### R2 — no PDF yet
+### R2 — PDF + office from HTML
 
-`pdfbaga` next for print path.
+HTML (XHTML table) → PDF / XLSX / ODS / DOCX / ODT via ReportIR.
 
 ### R3 — HTML must be well-formed XHTML
 

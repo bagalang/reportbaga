@@ -17,19 +17,19 @@ git clone git@github.com:bagalang/reportbaga.git app-product/reportbaga
 
 `sandak.toml` keeps path deps so shared packages stay in baga.
 `apps/report` still depends on `../reportbaga`. `tests/report_test.baga` stays in baga.
-**Счетоводни отчети:** данни / HTML → **Excel · CSV · PDF · HTML preview**.  
-PDF с **UTF-8 / кирилица** (вграден TTF).
+**Счетоводни отчети:** данни / HTML5 (XHTML) → **Excel · ODS · CSV · PDF · DOCX · ODT · HTML**.  
+PDF с **UTF-8 / кирилица** (вграден TTF). HTML трябва да е добре формиран XHTML с `<h1>`, `<p>` и `<table>`.
 
 | | |
 |--|--|
-| **sandak** | `reportbaga` **0.3.1** |
+| **sandak** | `reportbaga` **0.3.4** |
 | **Deps** | csvbaga, officebaga, pdfbaga, tplbaga, xmlbaga, bufbaga |
 | **Fixtures** | `fixtures/oborotna.html`, `oborotna.tpl.html` |
 
 ## Поток
 
 ```
-DB / CsvTable  ──► ReportIR ──► xlsx | csv | pdf | html
+DB / CsvTable  ──► ReportIR ──► xlsx | ods | csv | pdf | docx | odt | html
 HTML preview   ──► ReportIR ──┘
 tplbaga shell  ──► HTML preview + export (таблица от данни)
 ```
@@ -37,8 +37,10 @@ tplbaga shell  ──► HTML preview + export (таблица от данни)
 ## API
 
 ```baga
-// От HTML (preview в браузър)
+// От HTML (preview в браузър) → офис / PDF
 report_from_html(html, "xlsx")
+report_from_html(html, "ods")
+report_from_html(html, "docx")
 report_from_html_io(html, "pdf")?
 
 // От таблица (редове от SQL)

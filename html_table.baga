@@ -135,12 +135,14 @@ fn html_report_title(html: str) -> str {
     return str_trim(buf_str(b))
 }
 
-// First <p> text after title (period / firm line).
+// All <p> text after title until the first table (joined with " · ").
 fn html_report_meta(html: str) -> str {
     let p = xml_parser(html)
     let mut in_p: i64 = 0
     let mut seen_h1: i64 = 0
-    let mut b = buf_new()
+    let mut out = buf_new()
+    let mut cur = buf_new()
+    let mut npara: i64 = 0
     let mut done: i64 = 0
     while done == 0 {
         let ev = xml_next(p)
@@ -152,26 +154,37 @@ fn html_report_meta(html: str) -> str {
                 if loc == "h1" {
                     seen_h1 = 1
                 }
-                if loc == "p" && seen_h1 == 1 {
+                if loc == "table" && seen_h1 == 1 {
+                    done = 1
+                }
+                if loc == "p" && seen_h1 == 1 && done == 0 {
                     in_p = 1
-                    b = buf_clear(b)
+                    cur = buf_clear(cur)
                 }
             } else {
                 if ev.kind == 2 {
                     if html_local(ev.name) == "p" && in_p == 1 {
-                        done = 1
+                        let t = str_trim(buf_str(cur))
+                        if t != "" {
+                            if npara > 0 {
+                                out = buf_push(out, " · ")
+                            }
+                            out = buf_push(out, t)
+                            npara = npara + 1
+                        }
+                        in_p = 0
                     }
                 } else {
                     if ev.kind == 3 {
                         if in_p == 1 {
-                            b = buf_push(b, ev.text)
+                            cur = buf_push(cur, ev.text)
                         }
                     }
                 }
             }
         }
     }
-    return str_trim(buf_str(b))
+    return str_trim(buf_str(out))
 }
 
 // Escape for HTML cell text.
@@ -255,7 +268,8 @@ fn report_ir_to_html(title: str, meta: str, t: CsvTable) -> str {
     b = buf_push(b, "<html xmlns=\"http://www.w3.org/1999/xhtml\"><head><meta charset=\"utf-8\"/>")
     b = buf_push(b, "<title>")
     b = buf_push(b, html_esc_cell(title))
-    b = buf_push(b, "</title></head><body>\n")
+    b = buf_push(b, "</title><style type=\"text/css\">body{font-family:DejaVu Sans,sans-serif;font-size:13px;margin:24px}h1{font-size:18px;margin:0 0 8px}p{margin:0 0 12px;color:#333}table{border-collapse:collapse;width:100%}th,td{border:1px solid #444;padding:5px 8px;text-align:left;vertical-align:top}th{background:#e8e8e8}</style>")
+    b = buf_push(b, "</head><body>\n")
     b = buf_push(b, "<h1>")
     b = buf_push(b, html_esc_cell(title))
     b = buf_push(b, "</h1>\n")
@@ -267,5 +281,137 @@ fn report_ir_to_html(title: str, meta: str, t: CsvTable) -> str {
     b = buf_push(b, report_table_to_html(t))
     b = buf_push(b, "\n</body></html>\n")
     return buf_str(b)
+}
+
+fn HTML_H1() -> i64 { return 1 }
+fn HTML_P() -> i64 { return 2 }
+fn HTML_TABLE() -> i64 { return 3 }
+
+struct HtmlDoc {
+    kinds: Vec<i64>,
+    texts: Vec<str>,
+    ok: i64,
+    err: str
+}
+
+fn html_doc_fail(msg: str) -> HtmlDoc {
+    return HtmlDoc { kinds: vec_new(), texts: vec_new(), ok: 0, err: msg }
+}
+
+fn html_doc_parse(html: str) -> HtmlDoc {
+    let p = xml_parser(html)
+    let kinds: Vec<i64> = vec_new()
+    let texts: Vec<str> = vec_new()
+    let mut in_table: i64 = 0
+    let mut in_cell: i64 = 0
+    let mut in_h1: i64 = 0
+    let mut in_p: i64 = 0
+    let mut cell_first: i64 = 1
+    let mut row_has: i64 = 0
+    let mut tsv = buf_new()
+    let mut cell_buf = buf_new()
+    let mut text_buf = buf_new()
+    let mut done: i64 = 0
+    while done == 0 {
+        let ev = xml_next(p)
+        if ev.kind == 0 || ev.kind == 0 - 1 {
+            done = 1
+        } else {
+            if ev.kind == 1 {
+                let loc = html_local(ev.name)
+                if loc == "table" {
+                    in_table = in_table + 1
+                    if in_table == 1 {
+                        tsv = buf_clear(tsv)
+                    }
+                }
+                if in_table == 1 {
+                    if loc == "tr" {
+                        cell_first = 1
+                        row_has = 0
+                    }
+                    if loc == "td" || loc == "th" {
+                        in_cell = 1
+                        cell_buf = buf_clear(cell_buf)
+                        if cell_first == 0 {
+                            tsv = buf_push(tsv, "\t")
+                        }
+                        cell_first = 0
+                        row_has = 1
+                    }
+                    if loc == "br" && in_cell == 1 {
+                        cell_buf = buf_push(cell_buf, " ")
+                    }
+                } else {
+                    if loc == "h1" {
+                        in_h1 = 1
+                        text_buf = buf_clear(text_buf)
+                    }
+                    if loc == "p" {
+                        in_p = 1
+                        text_buf = buf_clear(text_buf)
+                    }
+                    if loc == "br" && in_p == 1 {
+                        text_buf = buf_push(text_buf, " ")
+                    }
+                }
+            } else {
+                if ev.kind == 2 {
+                    let loc = html_local(ev.name)
+                    if in_table >= 1 {
+                        if in_table == 1 {
+                            if loc == "td" || loc == "th" {
+                                tsv = buf_push(tsv, str_trim(buf_str(cell_buf)))
+                                in_cell = 0
+                            }
+                            if loc == "tr" {
+                                if row_has == 1 {
+                                    tsv = buf_push(tsv, "\n")
+                                }
+                            }
+                        }
+                        if loc == "table" {
+                            in_table = in_table - 1
+                            if in_table == 0 {
+                                vec_push(kinds, HTML_TABLE())
+                                vec_push(texts, buf_str(tsv))
+                            }
+                        }
+                    } else {
+                        if loc == "h1" && in_h1 == 1 {
+                            let t = str_trim(buf_str(text_buf))
+                            if t != "" {
+                                vec_push(kinds, HTML_H1())
+                                vec_push(texts, t)
+                            }
+                            in_h1 = 0
+                        }
+                        if loc == "p" && in_p == 1 {
+                            let t = str_trim(buf_str(text_buf))
+                            if t != "" {
+                                vec_push(kinds, HTML_P())
+                                vec_push(texts, t)
+                            }
+                            in_p = 0
+                        }
+                    }
+                } else {
+                    if ev.kind == 3 {
+                        if in_table == 1 && in_cell == 1 {
+                            cell_buf = buf_push(cell_buf, ev.text)
+                        } else {
+                            if in_h1 == 1 || in_p == 1 {
+                                text_buf = buf_push(text_buf, ev.text)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    if vec_len(kinds) < 1 {
+        return html_doc_fail("html: no document blocks")
+    }
+    return HtmlDoc { kinds: kinds, texts: texts, ok: 1, err: "" }
 }
 
