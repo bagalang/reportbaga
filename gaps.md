@@ -8,9 +8,12 @@
 
 ## Open
 
-### R1 — only first table
+### R1 — ~~only first table~~ — closed 2026-10-31 (XLSX multi-sheet)
 
-Multiple tables / multi-sheet Excel later.
+`ReportMultiIR` (ir.baga): title + meta + `Vec<str>` sheet names +
+`Vec<CsvTable>` tables. `report_multi_to_xlsx` (report.baga) генерира
+multi-sheet XLSX: workbook с N sheet entries, rels с N rIds, sheet1..N.xml.
+PDF/CSV/HTML остават single-table (first sheet).
 
 ### R2 — PDF + office from HTML
 

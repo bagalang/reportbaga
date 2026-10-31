@@ -52,3 +52,46 @@ fn report_ir_from_table(title: str, meta: str, table: CsvTable) -> ReportIR {
 fn report_ir_from_tsv(title: str, meta: str, tsv: str) -> ReportIR {
     return report_ir_ok(title, meta, csv_from_tsv(tsv))
 }
+
+// R1 (closed 2026-10-31): multi-table report — няколко таблици, всеки със
+// свое име (за Excel sheet tabs). Първата таблица е главната.
+struct ReportMultiIR {
+    title: str,
+    meta: str,
+    sheets: Vec<str>,       // имена на листовете (паралелно на tables)
+    tables: Vec<CsvTable>,  // данни
+    ok: i64,
+    err: str
+}
+
+fn report_multi_fail(msg: str) -> ReportMultiIR {
+    return ReportMultiIR {
+        title: "", meta: "",
+        sheets: vec_new(), tables: vec_new(),
+        ok: 0, err: msg
+    }
+}
+
+fn report_multi_ok(title: str, meta: str, sheets: Vec<str>, tables: Vec<CsvTable>) -> ReportMultiIR {
+    if vec_len(sheets) != vec_len(tables) {
+        return report_multi_fail("report: sheets/tables count mismatch")
+    }
+    for k in 0..vec_len(tables) {
+        if vec_get(tables, k).ok == 0 {
+            return report_multi_fail(vec_get(tables, k).err)
+        }
+    }
+    return ReportMultiIR { title: title, meta: meta, sheets: sheets, tables: tables, ok: 1, err: "" }
+}
+
+// Един sheet от съществуващ ReportIR.
+fn report_multi_from_ir(ir: ReportIR) -> ReportMultiIR {
+    if ir.ok == 0 {
+        return report_multi_fail(ir.err)
+    }
+    let mut sheets: Vec<str> = vec_new()
+    let mut tables: Vec<CsvTable> = vec_new()
+    vec_push(sheets, ir.title)
+    vec_push(tables, ir.table)
+    return report_multi_ok(ir.title, ir.meta, sheets, tables)
+}

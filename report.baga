@@ -7,10 +7,12 @@ import "officebaga/odf/write.baga"
 import "officebaga/docx/write.baga"
 import "pdfbaga/pdf.baga"
 import "tplbaga/tpl.baga"
+import "zipbaga/archive.baga"
 import "html_table.baga"
 import "ir.baga"
 import "std/str/str.baga"
 import "std/os/os.baga"
+import "std/bytes/bytes.baga"
 
 struct ReportOut {
     ok: i64,
@@ -54,6 +56,79 @@ fn report_ir_to_xlsx(ir: ReportIR) -> ReportOut {
     }
     // Freeze header row; sheet tab = report title (accounting UX)
     return report_ok(xlsx_create_bytes_opts(lines, report_sheet_name(ir.title), 1), "xlsx")
+}
+
+// R1 (closed 2026-10-31): multi-sheet XLSX — един sheet на таблица.
+fn report_multi_to_xlsx(mi: ReportMultiIR) -> ReportOut {
+    if mi.ok == 0 {
+        return report_fail(mi.err)
+    }
+    let n = vec_len(mi.tables)
+    if n == 0 {
+        return report_fail("report: no tables")
+    }
+    let names: Vec<str> = vec_new()
+    let parts: Vec<bytes> = vec_new()
+    vec_push(names, "[Content_Types].xml")
+    vec_push(parts, bytes_of_str(xlsx_content_types_multi(n)))
+    vec_push(names, "_rels/.rels")
+    vec_push(parts, bytes_of_str(xlsx_root_rels()))
+    vec_push(names, "xl/workbook.xml")
+    vec_push(parts, bytes_of_str(xlsx_workbook_multi(mi.sheets)))
+    vec_push(names, "xl/_rels/workbook.xml.rels")
+    vec_push(parts, bytes_of_str(xlsx_wb_rels_multi(n)))
+    for k in 0..n {
+        let t: CsvTable = vec_get(mi.tables, k)
+        let lines = csv_to_row_lines(t)
+        if vec_len(lines) == 0 {
+            return report_fail(concat("report: empty table ", vec_get_str(mi.sheets, k)))
+        }
+        let mut path = concat("xl/worksheets/sheet", concat(int_to_str(k + 1), ".xml"))
+        vec_push(names, path)
+        vec_push(parts, bytes_of_str(xlsx_sheet_xml_opts(lines, 1)))
+    }
+    return report_ok(zip_write_deflate(names, parts), "xlsx")
+}
+
+// Multi-sheet content types: един Override на sheet.
+fn xlsx_content_types_multi(n: i64) -> str {
+    let mut b = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\"><Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/><Default Extension=\"xml\" ContentType=\"application/xml\"/><Override PartName=\"/xl/workbook.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml\"/>"
+    for k in 0..n {
+        let mut part = "<Override PartName=\"/xl/worksheets/sheet"
+        part = concat(part, int_to_str(k + 1))
+        part = concat(part, ".xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml\"/>")
+        b = concat(b, part)
+    }
+    return concat(b, "</Types>")
+}
+
+fn xlsx_workbook_multi(sheets: Vec<str>) -> str {
+    let mut b = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><workbook xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\"><sheets>"
+    for k in 0..vec_len(sheets) {
+        let name = report_sheet_name(vec_get_str(sheets, k))
+        let mut s = "<sheet name=\""
+        s = concat(s, xlsx_esc(name))
+        s = concat(s, "\" sheetId=\"")
+        s = concat(s, int_to_str(k + 1))
+        s = concat(s, "\" r:id=\"rId")
+        s = concat(s, int_to_str(k + 1))
+        s = concat(s, "\"/>")
+        b = concat(b, s)
+    }
+    return concat(b, "</sheets></workbook>")
+}
+
+fn xlsx_wb_rels_multi(n: i64) -> str {
+    let mut b = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">"
+    for k in 0..n {
+        let mut r = "<Relationship Id=\"rId"
+        r = concat(r, int_to_str(k + 1))
+        r = concat(r, "\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet\" Target=\"worksheets/sheet")
+        r = concat(r, int_to_str(k + 1))
+        r = concat(r, ".xml\"/>")
+        b = concat(b, r)
+    }
+    return concat(b, "</Relationships>")
 }
 
 fn report_ir_to_csv(ir: ReportIR) -> ReportOut {
