@@ -215,6 +215,129 @@ fn html_esc_cell(s: str) -> str {
     return out
 }
 
+// R4 (closed 2026-10-31): number formatting — BGN с 2 десетични и разделител
+// за хиляди (nbsp). Разпознава се по числов низ (опц. знак, цифри, опц. точка).
+fn report_is_number(s: str) -> i64 {
+    let t = str_trim(s)
+    let n = len(t)
+    if n == 0 {
+        return 0
+    }
+    let mut i: i64 = 0
+    if char_at(t, 0) == 45 || char_at(t, 0) == 43 {
+        i = 1
+    }
+    let mut digits: i64 = 0
+    let mut dots: i64 = 0
+    while i < n {
+        let c = char_at(t, i)
+        if c >= 48 && c <= 57 {
+            digits = digits + 1
+        } else if c == 46 {
+            dots = dots + 1
+            if dots > 1 {
+                return 0
+            }
+        } else {
+            return 0
+        }
+        i = i + 1
+    }
+    if digits == 0 {
+        return 0
+    }
+    return 1
+}
+
+// Форматира числов низ като BGN: 1234567.8 → "1 234 567,80". Нечислови — непроменени.
+fn report_fmt_bgn(s: str) -> str {
+    let t = str_trim(s)
+    if report_is_number(t) == 0 {
+        return s
+    }
+    let mut neg: i64 = 0
+    let mut i: i64 = 0
+    if char_at(t, 0) == 45 {
+        neg = 1
+        i = 1
+    } else if char_at(t, 0) == 43 {
+        i = 1
+    }
+    let rest = substr(t, i, len(t))
+    let dot = str_find(rest, ".")
+    let mut int_part = rest
+    let mut frac_part = ""
+    if dot >= 0 {
+        int_part = substr(rest, 0, dot)
+        frac_part = substr(rest, dot + 1, len(rest))
+    }
+    let mut k: i64 = 0
+    while k < len(int_part) - 1 && char_at(int_part, k) == 48 {
+        k = k + 1
+    }
+    let ip = substr(int_part, k, len(int_part))
+    let mut grouped = ""
+    let il = len(ip)
+    let mut j: i64 = 0
+    while j < il {
+        if j > 0 && (il - j) % 3 == 0 {
+            grouped = concat(grouped, byte_chr(160))
+        }
+        grouped = concat(grouped, byte_chr(char_at(ip, j)))
+        j = j + 1
+    }
+    let mut frac = frac_part
+    if len(frac) > 2 {
+        frac = substr(frac, 0, 2)
+    }
+    while len(frac) < 2 {
+        frac = concat(frac, "0")
+    }
+    let mut out = concat(concat(grouped, ","), frac)
+    if neg == 1 {
+        out = concat("-", out)
+    }
+    return out
+}
+
+// R4: table → HTML с number formatting за числови клетки (редове след header).
+fn report_table_to_html_fmt(t: CsvTable) -> str {
+    if t.ok == 0 || t.cols <= 0 {
+        return ""
+    }
+    let nr = csv_nrows(t)
+    let mut b = buf_new()
+    b = buf_push(b, "<table>\n")
+    let mut r: i64 = 0
+    while r < nr {
+        if r == 0 {
+            b = buf_push(b, "<thead><tr>")
+        } else if r == 1 {
+            b = buf_push(b, "</thead><tbody>\n<tr>")
+        } else {
+            b = buf_push(b, "<tr>")
+        }
+        let mut c: i64 = 0
+        while c < t.cols {
+            let cell = csv_get(t, r, c)
+            if r == 0 {
+                b = buf_push(b, concat("<th>", concat(html_esc_cell(cell), "</th>")))
+            } else {
+                b = buf_push(b, concat("<td>", concat(html_esc_cell(report_fmt_bgn(cell)), "</td>")))
+            }
+            c = c + 1
+        }
+        if r == 0 {
+            b = buf_push(b, "</tr></thead>\n")
+        } else {
+            b = buf_push(b, "</tr>\n")
+        }
+        r = r + 1
+    }
+    b = buf_push(b, "</tbody>\n</table>\n")
+    return buf_str(b)
+}
+
 // CsvTable → HTML <table> fragment (first row = thead).
 fn report_table_to_html(t: CsvTable) -> str {
     if t.ok == 0 || t.cols <= 0 {

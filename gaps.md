@@ -23,6 +23,9 @@ HTML (XHTML table) → PDF / XLSX / ODS / DOCX / ODT via ReportIR.
 
 Uses xmlbaga; lenient HTML5 not supported.
 
-### R4 — no number formatting / freeze panes
+### R4 — ~~no number formatting~~ — closed 2026-10-31
 
-Amounts are strings as in HTML.
+`report_fmt_bgn(s)`: числов низ → BGN формат (запетая за десетични, nbsp
+за хиляди, точно 2 десетични). `report_is_number` разпознава числа.
+`report_table_to_html_fmt` — table с форматиране на числови клетки.
+Freeze panes остава (вече има в xlsx пътя).
